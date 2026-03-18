@@ -105,6 +105,14 @@ def get_hidden_states(
         ``hidden_states[0]`` is the input embedding, ``hidden_states[i]`` for
         ``i >= 1`` is the output of transformer block ``i-1``.  Each tensor has
         shape ``[batch, seq_len, hidden_dim]``.
+
+    Raises
+    ------
+    RuntimeError
+        If any hidden state contains NaN or Inf values, which typically
+        indicates float16 overflow.  Some models (e.g., those with Qwen3
+        backbones) produce activation values exceeding float16's max of
+        65504 in early layers.  Switching to ``bfloat16`` resolves this.
     """
     with torch.no_grad():
         outputs = model(
@@ -112,4 +120,19 @@ def get_hidden_states(
             attention_mask=attention_mask,
             output_hidden_states=True,
         )
-    return outputs.hidden_states
+    hidden_states = outputs.hidden_states
+
+    # Check for NaN/Inf — a common silent failure when using float16 with
+    # models whose vision projector or early layers produce large activations
+    # (e.g., values > 65504 overflow float16 to inf, then propagate as NaN).
+    for i, hs in enumerate(hidden_states):
+        if torch.isnan(hs).any() or torch.isinf(hs).any():
+            dtype = hs.dtype
+            raise RuntimeError(
+                f"NaN or Inf detected in hidden states at layer {i} "
+                f"(dtype={dtype}). This usually means activation values "
+                f"exceed the range of {dtype} (max={torch.finfo(dtype).max:.0f}). "
+                f"Try loading the model with dtype=torch.bfloat16 instead."
+            )
+
+    return hidden_states
