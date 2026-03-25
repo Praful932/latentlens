@@ -292,8 +292,9 @@ def process_image_with_mask(image_path, model_name=None):
     image = load_image(image_path)
     name_lower = model_name.lower() if model_name else ""
 
-    if "qwen2vl" in name_lower or "qwen2-vl" in name_lower:
-        # Qwen2-VL off-the-shelf → center-crop
+    if "qwen2vl" in name_lower or "qwen2-vl" in name_lower or "llava" in name_lower:
+        # Qwen2-VL and LLaVA-1.5: center-crop to square, no padding
+        # Qwen2-VL uses center-crop internally; LLaVA uses CLIP's center-crop
         pil_image = Image.fromarray(image)
         width, height = pil_image.size
         min_dim = min(width, height)
@@ -302,6 +303,12 @@ def process_image_with_mask(image_path, model_name=None):
         cropped = pil_image.crop((left, top, left + min_dim, top + min_dim))
         processed_image = cropped.resize((512, 512), Image.BILINEAR)
         image_mask = np.ones((512, 512), dtype=bool)
+    elif "molmo" in name_lower:
+        # Molmo-7B-D: aspect-preserving resize + black padding (same as CLIP default)
+        # Molmo's resize_and_pad preserves aspect ratio and center-pads
+        processed_image, image_mask = resize_and_pad(image, (512, 512), normalize=False)
+        processed_image = (processed_image * 255).astype(np.uint8)
+        processed_image = Image.fromarray(processed_image)
     elif "siglip" in name_lower or "dinov2" in name_lower:
         # SigLIP / DINOv2 → squash-resize to 512x512, no padding
         # Matches siglip_resize_and_pad / dino_resize_and_pad in model_preprocessor.py
