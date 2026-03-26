@@ -134,14 +134,14 @@ def extract_full_word_from_token(sentence: str, token: str) -> str:
     return sentence[start:end]
 
 
-def extract_words_from_contextual(nearest_list):
+def extract_words_from_contextual(nearest_list, top_k=5):
     """
-    Take top-5 nearest contextual neighbors and extract the full words.
+    Take top-k nearest contextual neighbors and extract the full words.
     Each entry has fields like token_str, caption, position, similarity.
     Returns a list of expanded words.
     """
     words = []
-    for entry in nearest_list[:5]:
+    for entry in nearest_list[:top_k]:
         token = entry.get('token_str', '')
         caption = entry.get('caption', '')
         word = extract_full_word_from_token(caption, token)
@@ -169,12 +169,16 @@ def detect_method(data):
         patches = []
         if "chunks" in first_img and first_img["chunks"]:
             patches = first_img["chunks"][0].get("patches", [])
+        elif "patches" in first_img:
+            patches = first_img["patches"]
         if patches:
             first_patch = patches[0]
             if "nearest_contextual_neighbors" in first_patch:
                 return "latentlens"
             if "top_predictions" in first_patch:
                 return "logitlens"
+            if "nearest_neighbors" in first_patch:
+                return "embeddinglens"
 
     raise ValueError(
         "Cannot detect method from JSON structure. "
@@ -186,28 +190,28 @@ def detect_method(data):
 def get_images_from_data(data, method):
     """Extract list of image entries from analysis JSON.
 
-    Each entry is a dict with at least 'image_idx' and 'chunks'.
+    Each entry is a dict with at least 'image_idx' and 'chunks' or 'patches'.
     """
-    if method == "embeddinglens":
+    if method == "embeddinglens" and "splits" in data:
         return data["splits"]["validation"]["images"]
     else:
         return data["results"]
 
 
-def extract_words_for_patch(patch, method):
+def extract_words_for_patch(patch, method, top_k=5):
     """Extract candidate words from a single patch entry.
 
-    Returns list of strings (top-5 words/tokens).
+    Returns list of strings (top-k words/tokens).
     """
     if method == "latentlens":
         neighbors = patch.get("nearest_contextual_neighbors", [])
-        return extract_words_from_contextual(neighbors)
+        return extract_words_from_contextual(neighbors, top_k=top_k)
     elif method == "logitlens":
         predictions = patch.get("top_predictions", [])
-        return [p["token"] for p in predictions[:5]]
+        return [p["token"] for p in predictions[:top_k]]
     elif method == "embeddinglens":
         neighbors = patch.get("nearest_neighbors", [])
-        return [n["token"] for n in neighbors[:5]]
+        return [n["token"] for n in neighbors[:top_k]]
     return []
 
 
@@ -297,7 +301,7 @@ def load_analysis_results(results_dir, layer):
     # Patterns that anchor the layer number (not followed by another digit)
     layer_re = re.compile(rf'(?:layer|visual){layer}(?:\D|$)')
 
-    files = sorted(f for f in results_dir.glob("*.json") if layer_re.search(f.name))
+    files = sorted(f for f in results_dir.glob("*.json") if f.is_file() and layer_re.search(f.name))
     if files:
         print(f"  Loading: {files[0].name}")
         with open(files[0]) as f:
@@ -372,6 +376,8 @@ def evaluate_model(args):
         first_patches = []
         if images and "chunks" in images[0] and images[0]["chunks"]:
             first_patches = images[0]["chunks"][0].get("patches", [])
+        elif images and "patches" in images[0]:
+            first_patches = images[0]["patches"]
         if first_patches:
             max_row = max(p.get("patch_row", 0) for p in first_patches)
             max_col = max(p.get("patch_col", 0) for p in first_patches)
@@ -411,6 +417,8 @@ def evaluate_model(args):
             patches = []
             if "chunks" in img_entry and img_entry["chunks"]:
                 patches = img_entry["chunks"][0].get("patches", [])
+            elif "patches" in img_entry:
+                patches = img_entry["patches"]
             if not patches:
                 continue
 
@@ -442,7 +450,7 @@ def evaluate_model(args):
                     continue
 
                 # Extract words
-                words = extract_words_for_patch(patch, method)
+                words = extract_words_for_patch(patch, method, top_k=args.top_k)
                 if not words:
                     continue
 
@@ -576,6 +584,9 @@ Examples:
                         help="Total number of patches to evaluate per layer")
     parser.add_argument("--num-samples-per-image", type=int, default=1,
                         help="Number of patches to sample per image")
+    parser.add_argument("--top-k", type=int, default=5,
+                        help="Number of top candidate words to pass to the judge (default: 5). "
+                             "Use --top-k 1 for pass@1 evaluation.")
     parser.add_argument("--model-name", default=None,
                         help="Model name for preprocessing (e.g. 'qwen2vl' for center-crop, "
                              "'qwen2-7b_vit-l-14-336_seed10' for resize-and-pad). "
