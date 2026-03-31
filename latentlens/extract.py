@@ -80,22 +80,25 @@ def load_corpus(source: Union[str, Path, list[str]]) -> list[str]:
 
 
 def build_index(
-    model_name: str,
-    corpus: Union[str, Path, list[str]],
+    model_name: Optional[str] = None,
+    corpus: Union[str, Path, list[str]] = None,
     layers: Optional[Sequence[int]] = None,
     max_contexts_per_token: int = 50,
     batch_size: int = 32,
     device: Optional[Union[str, torch.device]] = None,
     dtype: torch.dtype = torch.float32,
     show_progress: bool = True,
+    model=None,
+    tokenizer=None,
 ) -> ContextualIndex:
     """
     Build a :class:`ContextualIndex` by running a causal LM on a text corpus.
 
     Parameters
     ----------
-    model_name : str
+    model_name : str, optional
         HuggingFace model ID (e.g., ``"allenai/OLMo-7B-1024-preview"``).
+        Required unless ``model`` and ``tokenizer`` are provided directly.
     corpus : str, Path, or list[str]
         Text data — a file path (``.txt`` or ``.csv``) or a list of strings.
     layers : sequence of int, optional
@@ -108,22 +111,55 @@ def build_index(
     device : str or torch.device, optional
         Defaults to ``"cuda"`` if available.
     dtype : torch.dtype
-        Model weight dtype (default ``torch.float32``).
+        Model weight dtype (default ``torch.float32``). Only used when loading
+        via ``model_name``; ignored if ``model`` is passed directly.
     show_progress : bool
         Show a ``tqdm`` progress bar.
+    model : PreTrainedModel, optional
+        Pre-loaded causal LM (must support ``output_hidden_states=True``).
+        When provided, ``model_name`` is not used for loading, only for
+        looking up default layers in :data:`SUPPORTED_MODELS`.
+    tokenizer : PreTrainedTokenizer, optional
+        Pre-loaded tokenizer matching ``model``.  Required when ``model`` is
+        provided.
 
     Returns
     -------
     ContextualIndex
+
+    Examples
+    --------
+    Pass a sub-module of a multimodal model (e.g. Qwen2-Audio's LM backbone):
+
+    .. code-block:: python
+
+        wrapper = Qwen2AudioWrapper()
+        index = build_index(
+            model=wrapper.model.language_model,
+            tokenizer=wrapper.processor.tokenizer,
+            corpus="data/corpus/corpus.jsonl",
+        )
     """
+    if corpus is None:
+        raise ValueError("corpus is required")
+
     # ── Load model ────────────────────────────────────────────────────────
-    model, tokenizer = load_model(model_name, device=device, dtype=dtype)
+    if model is not None:
+        if tokenizer is None:
+            raise ValueError("tokenizer must be provided when model is passed directly")
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model.eval()
+    else:
+        if model_name is None:
+            raise ValueError("Either model_name or (model, tokenizer) must be provided")
+        model, tokenizer = load_model(model_name, device=device, dtype=dtype)
     dev = next(model.parameters()).device
 
     # ── Determine layers ──────────────────────────────────────────────────
     n_layers = model.config.num_hidden_layers
     if layers is None:
-        if model_name in SUPPORTED_MODELS:
+        if model_name is not None and model_name in SUPPORTED_MODELS:
             layers_to_extract = SUPPORTED_MODELS[model_name]["default_layers"]
         else:
             layers_to_extract = auto_layers(n_layers)
