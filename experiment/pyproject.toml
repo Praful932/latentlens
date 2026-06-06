@@ -1,0 +1,31 @@
+[project]
+name = "explainability-env"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Praful932",email = "praful.mohanan@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.3.0",
+    "torchvision>=0.18.0",
+    "transformers>=4.45.0",
+    "huggingface-hub>=0.25.0",
+    "numpy>=1.26.0",
+    "pillow>=10.0.0",
+    "einops>=0.8.0",
+    "omegaconf>=2.3.0",
+    "safetensors>=0.4.0",
+    "ml-dtypes>=0.4.0",
+    "accelerate>=1.0.0",
+    "tqdm>=4.60.0",
+    "packaging>=21.0",
+    "jupyter (>=1.1.1,<2.0.0)",
+    "datasets (>=4.8.5,<5.0.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

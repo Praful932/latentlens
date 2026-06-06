@@ -1,0 +1,14 @@
+- contextual embeddings are made available for a set of captions sourced from visual genome captions
+- each layers's .pt file contains these contextual embeddings, note that a single token can have multiple 
+contextual embeddings, based on the input that it is extracted from
+
+- a set of captions is passed through the llm, at each layer for each token contextualized embeddings are generated
+these are saved
+- since multiple captions are passed through the llm, there will be same word with a different contextual embedding
+    - so pkey will be (layer, sentence, token)
+
+- now through the vlm pass in the image
+    - sample n visual tokens and get their embedding at each layer
+    - for each visual token, find the top k closest embedding across all layers of the contextualized 
+        caption embeddings
+    - 

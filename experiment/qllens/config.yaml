@@ -1,0 +1,29 @@
+seed: 0
+model: "../data/Qwen2-VL-7B-Instruct"
+index_dir: "../data/latentlens-qwen2vl-embeddings"
+pixmo_cap_dir: "../data/pixmo_cap"
+
+conditions: ["fp16", "int8", "nf4"]
+quantize_only_llm: true
+
+# visual_layers[0]=embedding output; [i]=block i output — maps directly to hidden_states index
+visual_layers: [0, 1, 2, 4, 8, 16, 24, 26, 27]
+reference_layers_smoke: [8, 27]
+reference_layers_full:  [1, 2, 4, 8, 16, 24, 26, 27]
+
+top_k: 5
+patches_per_image: 1
+
+test_images:
+  source: "pixmo_cap_val"
+  n_smoke: 5
+  n_full: null   # set after smoke
+
+judge:
+  enabled: false
+  provider: "openai"
+  model: "gpt-4o"
+
+paths:
+  cache_dir: "cache"
+  results_dir: "results"

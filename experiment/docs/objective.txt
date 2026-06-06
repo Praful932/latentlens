@@ -1,0 +1,18 @@
+goal - check effect of quantization on the latentlens methodology
+
+1. % of interpretable tokens degrades in later layers after quantization
+2. After LLM quantization, the retrieved NN words for the visual tokens shift from hyponyms toward hypernyms compared to the FP setup
+Reference Slides
+
+I'm thinking of testing this as follows
+
+Plan:
+- Qwen2 + CLIP, quantize the LLM only (proj + vision encoder FP)
+- Arms in experiment - FP Control, GPTQ-8, GPTQ-4, AWQ-4
+- Index rebuilt as per the quantized LLM
+
+Metrics:
+- H1 - % interpertable visual tokens per layer
+- H2 - WordNet min_depth of top 5 tokens (hypernym climb)
+
+i have a constraint im limited on compute and API costs, so i want to do in the minimal setup possible

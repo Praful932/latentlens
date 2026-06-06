@@ -18,7 +18,8 @@ Usage:
     python quickstart.py --image path/to/image.jpg    # your own image
     python quickstart.py --layers 2,8,16,27 --top-k 10
 
-On first run, contextual embeddings (~2GB per layer) are downloaded from HuggingFace.
+Uses embeddings and model from experiment/data/ when present; otherwise
+downloads missing embeddings or the model from HuggingFace.
 """
 
 import argparse
@@ -38,12 +39,44 @@ from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
 HF_EMBEDDINGS_REPO = "McGill-NLP/latentlens-qwen2vl-embeddings"
 MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"
+EXPERIMENT_DATA_DIR = Path(__file__).parent / "experiment/data"
+LOCAL_EMBEDDINGS_DIR = EXPERIMENT_DATA_DIR / HF_EMBEDDINGS_REPO.split("/")[-1]
+LOCAL_MODEL_DIR = EXPERIMENT_DATA_DIR / MODEL_NAME.split("/")[-1]
 IMAGE_PAD_TOKEN_ID = 151655  # <|image_pad|> in Qwen2-VL's vocabulary
 FIXED_RESOLUTION = 448  # → 16×16 grid = 256 vision tokens
 AVAILABLE_LAYERS = [1, 2, 4, 8, 16, 24, 26, 27]  # layers with pre-computed embeddings
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def has_embedding_layers(path: Path) -> bool:
+    return path.is_dir() and any(path.glob("layer_*/embeddings_cache.pt"))
+
+
+def is_local_model_dir(path: Path) -> bool:
+    return path.is_dir() and (path / "config.json").is_file()
+
+
+def resolve_embeddings_dir(explicit: str | None = None) -> Path:
+    """Prefer experiment/data embeddings when layer caches exist."""
+    if explicit is not None:
+        return Path(explicit)
+    if has_embedding_layers(LOCAL_EMBEDDINGS_DIR):
+        return LOCAL_EMBEDDINGS_DIR
+    return LOCAL_EMBEDDINGS_DIR
+
+
+def resolve_model_path(explicit: str | None = None) -> str:
+    """Prefer experiment/data model snapshot when config.json is present."""
+    if explicit is not None:
+        path = Path(explicit)
+        if is_local_model_dir(path):
+            return str(path.resolve())
+        return MODEL_NAME
+    if is_local_model_dir(LOCAL_MODEL_DIR):
+        return str(LOCAL_MODEL_DIR.resolve())
+    return MODEL_NAME
+
 
 def download_contextual_embeddings(layer, cache_dir=None):
     """Download pre-computed contextual text embeddings for one layer."""
@@ -54,6 +87,14 @@ def download_contextual_embeddings(layer, cache_dir=None):
         cache_dir=cache_dir,
     )
     return path
+
+
+def resolve_contextual_embeddings_path(layer, embeddings_dir, cache_dir=None):
+    """Use local layer_N/embeddings_cache.pt if present, else download from HuggingFace."""
+    local_path = embeddings_dir / f"layer_{layer}/embeddings_cache.pt"
+    if local_path.is_file():
+        return str(local_path)
+    return download_contextual_embeddings(layer, cache_dir=cache_dir)
 
 
 def load_contextual_cache(path, device):
@@ -316,7 +357,7 @@ def create_visualization(image, results, num_vision_tokens, sample_indices, outp
     green = "#228B22"
 
     for rank, patch_idx in enumerate(sample_indices):
-        row = patch_idx // grid_size
+        row = patch_idx // grsoid_size
         col = patch_idx % grid_size
         neighbors = results[patch_idx]
         if not neighbors:
@@ -448,10 +489,22 @@ def main():
         help="Path for output PNG visualization (default: <image_stem>_latentlens.png)",
     )
     parser.add_argument(
+        "--embeddings-dir",
+        type=str,
+        default=None,
+        help="Directory with layer_N/embeddings_cache.pt (default: experiment/data if present)",
+    )
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help="Local model directory (default: experiment/data/<model-name> if present)",
+    )
+    parser.add_argument(
         "--cache-dir",
         type=str,
         default=None,
-        help="HuggingFace cache directory for downloaded embeddings",
+        help="HuggingFace cache directory when downloading missing embeddings",
     )
     args = parser.parse_args()
 
@@ -473,25 +526,39 @@ def main():
     print(f"Top-k:  {args.top_k}")
     print()
 
-    # ── Step 1: Download contextual embeddings (ALL layers) ────────────────
+    # ── Step 1: Load contextual embeddings (ALL layers) ──────────────────
     # LatentLens searches across all contextual layers and merges globally,
     # so we always need all available layers regardless of which LLM layers
     # we extract vision features from.
-    print("Step 1/4: Downloading contextual embeddings (all layers)...")
+    embeddings_dir = resolve_embeddings_dir(args.embeddings_dir)
+    model_path = resolve_model_path(args.model_dir)
+
+    print("Step 1/4: Loading contextual embeddings (all layers)...")
+    if has_embedding_layers(embeddings_dir):
+        print(f"  Embeddings: {embeddings_dir.resolve()} (local)")
+    else:
+        print(f"  Embeddings: {embeddings_dir.resolve()} (will fetch missing layers from Hub)")
     ctx_paths = {}
     for layer in AVAILABLE_LAYERS:
         print(f"  Layer {layer}...", end=" ", flush=True)
-        path = download_contextual_embeddings(layer, cache_dir=args.cache_dir)
+        local_path = embeddings_dir / f"layer_{layer}" / "embeddings_cache.pt"
+        path = resolve_contextual_embeddings_path(
+            layer,
+            embeddings_dir=embeddings_dir,
+            cache_dir=args.cache_dir,
+        )
         ctx_paths[layer] = path
-        print("done")
+        print("done (local)" if local_path.is_file() else "done (hub)")
     print()
 
     # ── Step 2: Load Qwen2-VL ────────────────────────────────────────────
-    print("Step 2/4: Loading Qwen2-VL-7B-Instruct...")
+    model_source = "local" if Path(model_path).is_dir() else "hub"
+    print(f"Step 2/4: Loading Qwen2-VL-7B-Instruct ({model_source})...")
+    print(f"  Path: {model_path}")
     model = Qwen2VLForConditionalGeneration.from_pretrained(
-        MODEL_NAME, torch_dtype=torch.float16,
+        model_path, torch_dtype=torch.float16,
     ).to(device).eval()
-    processor = AutoProcessor.from_pretrained(MODEL_NAME)
+    processor = AutoProcessor.from_pretrained(model_path)
 
     # Fix resolution so we get a consistent 16×16 grid
     fixed_pixels = FIXED_RESOLUTION * FIXED_RESOLUTION
@@ -511,6 +578,7 @@ def main():
         return_tensors="pt",
     )
     inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+    print(inputs)
 
     vision_start, vision_end, num_vision = find_vision_token_range(inputs["input_ids"])
     if num_vision == 0:
@@ -525,11 +593,12 @@ def main():
     print(f"  Hidden states extracted from {len(hidden_states)} layers")
     print()
 
-    # ── Step 4: Nearest-neighbor search (cross-layer merge) ─────────────
+    # ── Step 4: Nearest-neighbor search (cross-layer merge) ───-─────────
     # Pick display indices upfront so we only search the tokens we'll show.
     # Same 10 tokens for both text output and visualization.
     grid_size = int(math.sqrt(num_vision))
     random.seed(args.seed)
+    # sample visual token indices
     selected = sorted(random.sample(range(num_vision), min(10, num_vision)))
     sel_to_patch = {i: patch_idx for i, patch_idx in enumerate(selected)}
 
@@ -559,6 +628,7 @@ def main():
         for sel_i, neighbors in enumerate(sel_results_by_layer[layer]):
             full[sel_to_patch[sel_i]] = neighbors
         results_by_layer[layer] = full
+
 
     # ── Display results ──────────────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -591,3 +661,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
