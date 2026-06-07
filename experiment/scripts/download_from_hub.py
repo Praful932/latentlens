@@ -6,10 +6,17 @@ Uses snapshot_download with resume support. Skips files that are already
 complete locally.
 
 Usage:
-    python download_index.py McGill-NLP/latentlens-qwen2vl-embeddings
+    python download_index.py McGill-NLP/latentlens-qwen2vl-embeddings 
     python download_index.py --repo-id org/my-dataset --repo-type dataset
     python download_index.py org/my-model --output-dir ../data/my-model
     python download_index.py org/my-model --include "layer_*/embeddings_cache.pt"
+    
+    # embeddings
+    python /workspace/latentlens/experiment/scripts/download_from_hub.py McGill-NLP/latentlens-qwen2vl-embeddings --output-dir /workspace/latentlens/experiment/data/latentlens-qwen2vl-embeddings
+    # model
+    python /workspace/latentlens/experiment/scripts/download_from_hub.py Qwen/Qwen2-VL-7B-Instruct --output-dir /workspace/latentlens/experiment/data/Qwen2-VL-7B-Instruct
+    # index
+    python /workspace/latentlens/experiment/scripts/prepare_pixmo_cap.py --output-dir /workspace/latentlens/experiment/data/
 """
 
 import argparse
