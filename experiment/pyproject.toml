@@ -6,7 +6,7 @@ authors = [
     {name = "Praful932",email = "praful.mohanan@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "transformers>=4.45.0,<5.0.0",
     "huggingface-hub>=0.25.0",
@@ -24,6 +24,8 @@ dependencies = [
     "torch (==2.4.1+cu124)",
     "matplotlib (>=3.10.9,<4.0.0)",
     "torchvision (==0.19.1)",
+    "nltk (>=3.9.4,<4.0.0)",
+    "spacy (>=3.8.14,<4.0.0)",
 ]
 
 
