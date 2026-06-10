@@ -11,4 +11,5 @@ these are saved
     - sample n visual tokens and get their embedding at each layer
     - for each visual token, find the top k closest embedding across all layers of the contextualized 
         caption embeddings
-    - 
+
+- control setup

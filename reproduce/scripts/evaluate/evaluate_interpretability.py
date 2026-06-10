@@ -62,7 +62,7 @@ from openai import OpenAI
 from utils import (
     process_image_with_mask,
     calculate_square_bbox_from_patch,
-    draw_bbox_on_image,
+    draw_bbox_on_image,z
     sample_valid_patch_positions,
 )
 from prompts import IMAGE_PROMPT_WITH_CROP
