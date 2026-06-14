@@ -6,6 +6,7 @@ contextual embeddings, based on the input that it is extracted from
 these are saved
 - since multiple captions are passed through the llm, there will be same word with a different contextual embedding
     - so pkey will be (layer, sentence, token)
+    - one layer embed shape - [300836, 3584] , vocab (note these are contextualized vocab) by embed size
 
 - now through the vlm pass in the image
     - sample n visual tokens and get their embedding at each layer

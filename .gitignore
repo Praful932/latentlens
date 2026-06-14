@@ -1,4 +1,7 @@
-experiment/data/
+experiment/data/latentlens-qwen2vl-embeddings
+experiment/data/pixmo_cap_val100
+experiment/data/Qwen2-VL-7B-Instruct
+
 
 # Python
 __pycache__/
@@ -41,7 +44,7 @@ env/
 # Data and checkpoints (too large for git)
 checkpoints/
 contextual_embeddings/
-results/
+# results/
 demo/
 *.pt
 *.safetensors
