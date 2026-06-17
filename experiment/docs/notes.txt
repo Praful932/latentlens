@@ -14,3 +14,22 @@ these are saved
         caption embeddings
 
 - control setup
+
+summary
+top1 exact match vs fp16
+int8 > nf4
+
+mean depth by layer
+at 16th layer, words mapping to visual tokens have a very low min depth, very high level abstractions
+behave like a encoder then decoder, high then low then high and quantization effect reverses
+
+hypernym climb kind of present when you comapre int 8 and nf4 alhtough only until layer 16
+
+due to quantization error compounduing, % of exact word match drops
+
+how does a hidden state value change under quantization?
+
+
+when comparing words against different p, shouldnt top 1 min depth be compared?
+
+inspect manual samples
