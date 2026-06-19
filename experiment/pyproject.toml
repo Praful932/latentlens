@@ -30,6 +30,7 @@ dependencies = [
     "optimum (>=2.2.0,<3.0.0)",
     "gptqmodel (>=7.1.0,<8.0.0)",
     "qwen-vl-utils (>=0.0.14,<0.0.15)",
+    "flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiFALSE-cp311-cp311-linux_x86_64.whl",
 ]
 
 
