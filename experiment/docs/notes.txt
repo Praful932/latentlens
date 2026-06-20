@@ -33,3 +33,6 @@ how does a hidden state value change under quantization?
 when comparing words against different p, shouldnt top 1 min depth be compared?
 
 inspect manual samples
+
+flash attention enable and needs rerun
+add gptq int 8 as well
